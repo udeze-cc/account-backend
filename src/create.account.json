@@ -1,0 +1,21 @@
+{
+    "definitions": {},
+    "$schema": "http://json-schema.org/draft-04/schema",
+    "type": "object",
+    "title": "maketplaces account service",
+    "required": ["email", "name", "family_name"],
+    "properties": {
+        "email": {
+            "description": "Account email",
+            "type": "string"
+        },
+        "name": {
+            "description": "Account name",
+            "type": "string"
+        },
+        "family_name": {
+            "description": "Account family name",
+            "type": "string"
+        }
+    }
+}
