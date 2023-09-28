@@ -30,26 +30,46 @@ function failureResponse(message, code) {
 module.exports.createDocument = async (event) => {
   const driver = new QldbDriver(process.env.LEDGER_NAME);
   const tableName = event.pathParameters.tableName;
-  const {partyName, voteCount, pollingCentre, officerId, electionDate, electionId} = JSON.parse(event.body);
+  const {
+    electionVotes, 
+    electionPollingCentre, 
+    electionOfficerId, 
+    electionDate, 
+    electionId, 
+    electionWard, 
+    electionLga, 
+    electionState, 
+    electionFederal
+  } = JSON.parse(event.body);
 
   try {
     const response = await driver.executeLambda(async (txn) => {
-      const document = {key: uuidv4(), partyName, voteCount, pollingCentre, officerId, electionDate, electionId, ward, lga, state, federal};
+      const document = {electionResultKey: uuidv4(), electionPollingCentre, electionOfficerId, electionDate, electionId, electionWard, electionLga, electionState, electionFederal, electionVotes};
       return await insertDocument(txn, tableName, document)
-      .then(res => {
-        const key = uuidv4()
-        const wkey = `${document.key}--${key}`;
-        // After saving result into results table
-        insertDocument(txn, 'Ward', {...document, wkey})
+      .then(async res => {
+        // Save to Vote
+        const vkey = uuidv4();
+        const vDoc = {...electionVotes, electionResultKey: document.electionResultKey, vkey: `${vkey}--${document.electionResultKey}`};
+        await insertDocument(txn, 'ElectionVotes', vDoc)
         .then(res => {
+          return vDoc;
+        })
+        // Save to Ward
+        const key = uuidv4()
+        const wkey = `${document.electionResultKey}--${key}`;
+        // After saving result into results table
+        await insertDocument(txn, 'Ward', {...document, wkey, electionResultKey: document.electionResultKey})
+        .then(async res => {
+          // Save to LGA
           const key = uuidv4();
-          const skey = `${wkey}--${key}`;
-          insertDocument(txn, 'State', {...document, skey, key})
-          .then(res => {
+          const lkey = `${wkey}--${key}`;
+          await insertDocument(txn, 'LGA', {...document, lkey, electionResultKey: document.electionResultKey})
+          .then(async res => {
+            // Save to State
             const key = uuidv4();
-            const fkey = `${skey}--${key}`;
-            insertDocument(txn, 'Federal', {...document, fkey, key})
-            .then(res => {
+            const skey = `${lkey}--${key}`;
+            await insertDocument(txn, 'State', {...document, skey, electionResultKey: document.electionResultKey})
+            .then(async res => {
               return document;
             })
             return document;
@@ -127,7 +147,7 @@ module.exports.createIndex = async (event) => {
   }
 }
 
-module.exports.fetchElectionData = async (event) => {
+module.exports.fetchAllElectionData = async (event) => {
   const driver = new QldbDriver(process.env.LEDGER_NAME);
   // "SELECT firstName, age, lastName FROM People WHERE firstName = ?", "John"
   const table = event.pathParameters.table;
